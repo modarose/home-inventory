@@ -1,0 +1,157 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field span {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-text);
+  margin-bottom: 4px;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  padding: 8px 10px;
+  font: inherit;
+  background: #fafafa;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: #ffffff;
+}
+
+.form-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #486370;
+}
+
+.tag-row {
+  display: flex;
+  gap: 8px;
+}
+
+.tag {
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: #f3f3f0;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tag-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filters-search {
+  flex: 1;
+}
+
+.filters-select {
+  width: 160px;
+}
+
+.table-wrapper {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.inventory-table th,
+.inventory-table td {
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.inventory-table thead {
+  background: #f3f3f0;
+}
+
+.inventory-table tbody tr:nth-child(even) {
+  background: #fafaf8;
+}
+
+.cell-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: #e0e0da;
+}
+
+.cell-title {
+  font-weight: 500;
+}
+
+.cell-sub {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+
+.tag-pill {
+  background: #f0f2f3;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted-text);
+}
+
+.icon-btn:hover {
+  color: var(--accent);
+}
+
+.empty-row {
+  text-align: center;
+  padding: 20px 0;
+  color: var(--muted-text);
+}
