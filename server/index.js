@@ -89,7 +89,12 @@ app.put("/api/items/:id", requireAuth, async (request, response, next) => {
   try {
     const update = { ...request.body, ownerId, updatedAt: new Date().toISOString() };
     delete update._id;
-    const result = await (await getItems()).findOneAndUpdate({ id: request.params.id, ownerId }, { $set: update }, { returnDocument: "after" });
+    const removableFields = ["photoData", "photoUrl", "photoName", "receiptData", "receiptName"];
+    const unset = Object.fromEntries(removableFields.filter(field => !update[field]).map(field => [field, ""]));
+    removableFields.forEach(field => { if (!update[field]) delete update[field]; });
+    const updateDocument = { $set: update };
+    if (Object.keys(unset).length) updateDocument.$unset = unset;
+    const result = await (await getItems()).findOneAndUpdate({ id: request.params.id, ownerId }, updateDocument, { returnDocument: "after" });
     if (!result) return response.status(404).json({ error: "Item not found" });
     response.json(result);
   } catch (error) { next(error); }
