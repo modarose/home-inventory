@@ -7,6 +7,7 @@ HEMLIST is a local-first home inventory app for keeping track of household items
 ## What it does
 
 - Browse your inventory by room
+- Add, rename, and remove rooms from Settings
 - Add, edit, and remove household items
 - Track quantity and value per item
 - Calculate total household value
@@ -14,6 +15,7 @@ HEMLIST is a local-first home inventory app for keeping track of household items
 - Record condition and intended use
 - Add notes such as brand, model, or serial number
 - Upload item photos from a phone or computer
+- View item photos full-screen
 - Attach receipts without a third-party storage service
 - Resize and compress uploaded images before storage
 - Log out of the cloud account from the app

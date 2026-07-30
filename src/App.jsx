@@ -3,7 +3,7 @@ import "./App.css";
 import { api, cloudEnabled } from "./lib/api";
 
 const STORAGE_KEY = "homeInventory_v1";
-const ROOMS = ["Living room", "Bedroom", "Kitchen", "Bathroom", "Garage", "Office", "Outdoor", "Other"];
+const DEFAULT_ROOMS = ["Living room", "Bedroom", "Kitchen", "Bathroom", "Garage", "Office", "Outdoor", "Other"];
 const CATEGORIES = ["Furniture", "Electronics", "Appliance", "Lighting", "Decor", "Clothing", "Tools", "Other"];
 const PURPOSES = ["insurance", "airbnb", "general"];
 const EMPTY_FORM = {
@@ -23,6 +23,18 @@ function loadItems() {
 function saveItems(items) {
   try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
   catch { window.alert("Your browser storage is full. Try removing a large photo or export your inventory before continuing."); }
+}
+
+function loadRooms() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem("homeInventory_rooms_v1") || "null");
+    return Array.isArray(stored) && stored.length ? stored : DEFAULT_ROOMS;
+  } catch { return DEFAULT_ROOMS; }
+}
+
+function saveRooms(rooms) {
+  try { window.localStorage.setItem("homeInventory_rooms_v1", JSON.stringify(rooms)); }
+  catch { window.alert("Your browser storage is full. Room changes could not be saved."); }
 }
 
 function formatMoney(value) {
@@ -53,7 +65,7 @@ async function readFile(file, onLoad) {
   reader.readAsDataURL(file);
 }
 
-function FormFields({ form, setForm }) {
+function FormFields({ form, setForm, rooms }) {
   function update(key, value) { setForm(previous => ({ ...previous, [key]: value })); }
   function togglePurpose(purpose) {
     setForm(previous => ({
@@ -77,7 +89,7 @@ function FormFields({ form, setForm }) {
             <label htmlFor="item-room">Room</label>
             <select id="item-room" value={form.location} onChange={event => update("location", event.target.value)}>
               <option value="">Choose a room</option>
-              {ROOMS.map(room => <option key={room}>{room}</option>)}
+              {rooms.map(room => <option key={room}>{room}</option>)}
             </select>
           </div>
           <div className="field">
@@ -137,12 +149,15 @@ function FormFields({ form, setForm }) {
   );
 }
 
-function ItemCard({ item, onOpen }) {
+function ItemCard({ item, onOpen, onImage }) {
   const total = (item.value || 0) * (item.quantity || 1);
-  return <button className="item-card" type="button" onClick={() => onOpen(item)}>
-    <div className="item-image">{item.photoData || item.photoUrl ? <img src={item.photoData || item.photoUrl} alt="" /> : <span>{item.name?.[0]?.toUpperCase() || "?"}</span>}</div>
-    <div className="item-card-body"><div className="item-card-heading"><strong>{item.name}</strong><span className="item-arrow">↗</span></div><div className="item-card-meta">{item.category || "Uncategorised"}<span>·</span>{item.quantity || 1} {item.quantity === 1 ? "item" : "items"}</div><div className="item-card-footer"><span>{formatMoney(total)}</span><span className="condition-dot">{item.condition || "Good"}</span></div></div>
-  </button>;
+  const image = item.photoData || item.photoUrl;
+  return <div className="item-card">
+    <button className={image ? "item-image item-image-button" : "item-image"} type="button" onClick={() => image ? onImage(image, item.name) : onOpen(item)} aria-label={image ? `View photo of ${item.name}` : `Edit ${item.name}`}>
+      {image ? <img src={image} alt="" /> : <span>{item.name?.[0]?.toUpperCase() || "?"}</span>}
+    </button>
+    <button className="item-card-body" type="button" onClick={() => onOpen(item)}><div className="item-card-heading"><strong>{item.name}</strong><span className="item-arrow">↗</span></div><div className="item-card-meta">{item.category || "Uncategorised"}<span>·</span>{item.quantity || 1} {item.quantity === 1 ? "item" : "items"}</div><div className="item-card-footer"><span>{formatMoney(total)}</span><span className="condition-dot">{item.condition || "Good"}</span></div></button>
+  </div>;
 }
 
 function LoginScreen({ onLogin, error }) {
@@ -150,8 +165,28 @@ function LoginScreen({ onLogin, error }) {
   return <div className="login-shell"><div className="login-card"><div className="brand">HEMLIST<span>home, documented</span></div><span className="eyebrow">Your private inventory</span><h1>Welcome home.</h1><p>Enter your password to access your household inventory.</p><form onSubmit={event => { event.preventDefault(); onLogin(password); }}><label className="login-label" htmlFor="login-password">Password</label><input id="login-password" className="login-input" type="password" value={password} onChange={event => setPassword(event.target.value)} autoFocus /><button className="button button-primary login-button" type="submit">Unlock inventory</button>{error && <div className="login-error" role="alert">{error}</div>}</form><small className="login-note">Your data is stored securely in your private cloud database.</small></div></div>;
 }
 
+function SideMenu({ open, onClose, onHome, onAdd, onSettings, onLogout, cloudMode }) {
+  if (!open) return null;
+  return <><div className="menu-backdrop" onClick={onClose} /><aside className="side-menu"><div className="side-menu-top"><div className="brand">HEMLIST<span>home, documented</span></div><button className="modal-close" type="button" onClick={onClose} aria-label="Close menu">×</button></div><nav className="side-nav"><button type="button" onClick={onHome}>⌂ <span>Home</span></button><button type="button" onClick={onAdd}>＋ <span>Add item</span></button><button type="button" onClick={onSettings}>⚙ <span>Settings</span></button></nav>{cloudMode && <button className="side-logout" type="button" onClick={onLogout}>Log out</button>}</aside></>;
+}
+
+function RoomSettings({ rooms, onAdd, onRename, onRemove }) {
+  const [newRoom, setNewRoom] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState("");
+  function add(event) { event.preventDefault(); if (newRoom.trim()) { onAdd(newRoom.trim()); setNewRoom(""); } }
+  return <section className="settings-section"><span className="eyebrow">Personalise your home</span><h1>Rooms</h1><p className="settings-copy">Create the places that make sense for your home. Removing a room won’t delete its items.</p><form className="room-add" onSubmit={add}><input value={newRoom} onChange={event => setNewRoom(event.target.value)} placeholder="Add a room" aria-label="New room name" /><button className="button button-primary" type="submit">Add room</button></form><div className="room-list">{rooms.map(room => <div className="room-list-row" key={room}>{editing === room ? <input className="room-edit-input" value={draft} onChange={event => setDraft(event.target.value)} autoFocus /> : <span>{room}</span>}{editing === room ? <div className="room-row-actions"><button type="button" onClick={() => { onRename(room, draft); setEditing(null); }}>Save</button><button type="button" onClick={() => setEditing(null)}>Cancel</button></div> : <div className="room-row-actions"><button type="button" onClick={() => { setEditing(room); setDraft(room); }}>Edit</button><button type="button" onClick={() => onRemove(room)}>Remove</button></div>}</div>)}</div></section>;
+}
+
+function ImageLightbox({ image, alt, onClose }) {
+  useEffect(() => { function closeOnEscape(event) { if (event.key === "Escape") onClose(); } window.addEventListener("keydown", closeOnEscape); return () => window.removeEventListener("keydown", closeOnEscape); }, [onClose]);
+  if (!image) return null;
+  return <div className="lightbox" role="dialog" aria-modal="true" aria-label={`Full size image of ${alt}`} onClick={onClose}><button className="lightbox-close" type="button" onClick={onClose} aria-label="Close image">×</button><img src={image} alt={alt} onClick={event => event.stopPropagation()} /></div>;
+}
+
 export default function App() {
   const [items, setItems] = useState(() => cloudEnabled ? [] : loadItems());
+  const [roomNames, setRoomNames] = useState(() => cloudEnabled ? DEFAULT_ROOMS : loadRooms());
   const [authStatus, setAuthStatus] = useState(cloudEnabled ? "loading" : "local");
   const [authError, setAuthError] = useState("");
   const [view, setView] = useState("home");
@@ -159,11 +194,13 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
 
   useEffect(() => {
     if (!cloudEnabled) return;
     api.me().then(result => {
-      if (result.authenticated) return api.listItems().then(remoteItems => { setItems(remoteItems); setAuthStatus("authenticated"); });
+      if (result.authenticated) return Promise.all([api.listItems(), api.listRooms()]).then(([remoteItems, remoteRooms]) => { setItems(remoteItems); setRoomNames(remoteRooms); setAuthStatus("authenticated"); });
       setAuthStatus("logged-out");
     }).catch(error => { setAuthError(error.message); setAuthStatus("error"); });
   }, []);
@@ -195,7 +232,7 @@ export default function App() {
   }
 
   async function login(password) {
-    try { await api.login(password); setItems(await api.listItems()); setAuthStatus("authenticated"); setAuthError(""); }
+    try { const [, remoteRooms] = await Promise.all([api.login(password), api.listRooms()]); setItems(await api.listItems()); setRoomNames(remoteRooms); setAuthStatus("authenticated"); setAuthError(""); }
     catch (error) { setAuthError(error.message); }
   }
 
@@ -205,8 +242,34 @@ export default function App() {
     setView("home");
     setAuthStatus(cloudEnabled ? "logged-out" : "local");
   }
+  async function addRoom(room) {
+    const next = [...roomNames, room].filter((name, index, list) => list.indexOf(name) === index);
+    if (next.length === roomNames.length) return;
+    try { if (cloudEnabled) await api.saveRooms(next); else saveRooms(next); setRoomNames(next); } catch (error) { window.alert(error.message); }
+  }
+  async function renameRoom(previousName, nextName) {
+    const cleanName = nextName.trim();
+    if (!cleanName || (cleanName !== previousName && roomNames.includes(cleanName))) return;
+    const nextRooms = roomNames.map(room => room === previousName ? cleanName : room);
+    const affected = items.filter(item => item.location === previousName);
+    try {
+      if (cloudEnabled) { await Promise.all(affected.map(item => api.updateItem(item.id, { ...item, location: cleanName }))); await api.saveRooms(nextRooms); setItems(await api.listItems()); }
+      else { persist(items.map(item => item.location === previousName ? { ...item, location: cleanName } : item)); saveRooms(nextRooms); }
+      setRoomNames(nextRooms); if (activeRoom === previousName) setActiveRoom(cleanName);
+    } catch (error) { window.alert(error.message); }
+  }
+  async function removeRoom(room) {
+    if (!window.confirm(`Remove ${room}? Items in this room will become unassigned.`)) return;
+    const nextRooms = roomNames.filter(name => name !== room);
+    const affected = items.filter(item => item.location === room);
+    try {
+      if (cloudEnabled) { await Promise.all(affected.map(item => api.updateItem(item.id, { ...item, location: "" }))); await api.saveRooms(nextRooms); setItems(await api.listItems()); }
+      else { persist(items.map(item => item.location === room ? { ...item, location: "" } : item)); saveRooms(nextRooms); }
+      setRoomNames(nextRooms); if (activeRoom === room) setActiveRoom("All rooms");
+    } catch (error) { window.alert(error.message); }
+  }
   const totalValue = items.reduce((sum, item) => sum + ((item.value || 0) * (item.quantity || 1)), 0);
-  const rooms = useMemo(() => ROOMS.map(room => ({ room, items: items.filter(item => item.location === room) })).filter(group => group.items.length), [items]);
+  const roomGroups = useMemo(() => roomNames.map(room => ({ room, items: items.filter(item => item.location === room) })).filter(group => group.items.length), [items, roomNames]);
   const visibleItems = useMemo(() => items.filter(item => {
     const matchesRoom = activeRoom === "All rooms" || item.location === activeRoom;
     const needle = query.toLowerCase();
@@ -216,7 +279,9 @@ export default function App() {
   if (authStatus === "loading") return <div className="login-shell"><div className="login-card login-loading">Loading your inventory…</div></div>;
   if (cloudEnabled && authStatus !== "authenticated") return <LoginScreen onLogin={login} error={authError} />;
 
-  if (view === "form") return <div className="app-shell"><header className="topbar"><button className="brand brand-button" type="button" onClick={() => setView("home")}>HEMLIST<span>home, documented</span></button><div className="topbar-actions"><button className="text-button" type="button" onClick={() => setView("home")}>Cancel</button>{cloudEnabled && <button className="text-button" type="button" onClick={logout}>Log out</button>}</div></header><main className="form-page"><div className="form-intro"><span className="eyebrow">{editingId ? "Update your inventory" : "A little more clarity at home"}</span><h1>{editingId ? "Edit item" : "Add something to your home"}</h1><p>Capture the details now. You’ll thank yourself later.</p></div><form onSubmit={saveForm}><FormFields form={form} setForm={setForm} /><div className="form-actions"><button type="button" className="button button-quiet" onClick={() => setView("home")}>Cancel</button>{editingId && <button type="button" className="button button-danger" onClick={deleteItem}>Delete</button>}<button className="button button-primary" type="submit">{editingId ? "Save changes" : "Save item"}</button></div></form></main></div>;
+  if (view === "form") return <div className="app-shell"><header className="topbar"><button className="brand brand-button" type="button" onClick={() => setView("home")}>HEMLIST<span>home, documented</span></button><div className="topbar-actions"><button className="text-button" type="button" onClick={() => setView("home")}>Cancel</button><button className="menu-button" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu">☰</button></div></header><SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onHome={() => { setMenuOpen(false); setView("home"); }} onAdd={() => { setMenuOpen(false); startNew(); }} onSettings={() => { setMenuOpen(false); setView("settings"); }} onLogout={logout} cloudMode={cloudEnabled} /><main className="form-page"><div className="form-intro"><span className="eyebrow">{editingId ? "Update your inventory" : "A little more clarity at home"}</span><h1>{editingId ? "Edit item" : "Add something to your home"}</h1><p>Capture the details now. You’ll thank yourself later.</p></div><form onSubmit={saveForm}><FormFields form={form} setForm={setForm} rooms={roomNames} /><div className="form-actions"><button type="button" className="button button-quiet" onClick={() => setView("home")}>Cancel</button>{editingId && <button type="button" className="button button-danger" onClick={deleteItem}>Delete</button>}<button className="button button-primary" type="submit">{editingId ? "Save changes" : "Save item"}</button></div></form></main></div>;
 
-  return <div className="app-shell"><header className="topbar"><div className="brand">HEMLIST<span>home, documented</span></div><div className="topbar-actions"><button className="button button-primary button-small" type="button" onClick={startNew}>＋ Add item</button>{cloudEnabled && <button className="text-button" type="button" onClick={logout}>Log out</button>}</div></header><main className="home-page"><section className="welcome"><div><span className="eyebrow">Your home, at a glance</span><h1>A calmer way to keep track.</h1><p>See what you own, where it lives, and what it’s worth.</p></div><div className="stats"><div><strong>{items.length}</strong><span>things</span></div><div><strong>{rooms.length}</strong><span>rooms</span></div><div><strong>{formatMoney(totalValue)}</strong><span>total value</span></div></div></section><section className="room-section"><div className="section-heading"><div><span className="eyebrow">Browse by place</span><h2>Rooms</h2></div><span className="result-count">{items.length} {items.length === 1 ? "item" : "items"}</span></div><div className="room-grid"><button type="button" className={activeRoom === "All rooms" ? "room-card room-card-active" : "room-card"} onClick={() => setActiveRoom("All rooms")}><span className="room-symbol">⌂</span><strong>All rooms</strong><small>{items.length} items</small></button>{rooms.map(group => <button type="button" key={group.room} className={activeRoom === group.room ? "room-card room-card-active" : "room-card"} onClick={() => setActiveRoom(group.room)}><span className="room-symbol">{group.room === "Outdoor" ? "◌" : "⌂"}</span><strong>{group.room}</strong><small>{group.items.length} {group.items.length === 1 ? "item" : "items"}</small></button>)}</div></section><section className="items-section"><div className="section-heading"><div><span className="eyebrow">{activeRoom}</span><h2>{activeRoom === "All rooms" ? "Recently added" : "Everything here"}</h2></div><div className="search-box"><span>⌕</span><input aria-label="Search your inventory" placeholder="Search" value={query} onChange={event => setQuery(event.target.value)} /></div></div>{visibleItems.length ? <div className="item-grid">{visibleItems.map(item => <ItemCard key={item.id} item={item} onOpen={openItem} />)}</div> : <div className="empty-state"><div className="empty-mark">○</div><h3>{query ? "Nothing found" : activeRoom === "All rooms" ? "Your home is ready to be documented" : `Nothing in the ${activeRoom.toLowerCase()} yet`}</h3><p>{query ? "Try another search." : "Start with one item. Small steps make a useful inventory."}</p><button className="button button-primary" type="button" onClick={startNew}>＋ Add your first item</button></div>}</section></main></div>;
+  if (view === "settings") return <div className="app-shell"><header className="topbar"><button className="brand brand-button" type="button" onClick={() => setView("home")}>HEMLIST<span>home, documented</span></button><button className="menu-button" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu">☰</button></header><SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onHome={() => { setMenuOpen(false); setView("home"); }} onAdd={() => { setMenuOpen(false); startNew(); }} onSettings={() => setMenuOpen(false)} onLogout={logout} cloudMode={cloudEnabled} /><main className="settings-page"><RoomSettings rooms={roomNames} onAdd={addRoom} onRename={renameRoom} onRemove={removeRoom} /></main></div>;
+
+  return <div className="app-shell"><header className="topbar"><div className="brand">HEMLIST<span>home, documented</span></div><div className="topbar-actions"><button className="button button-primary button-small" type="button" onClick={startNew}>＋ Add item</button><button className="menu-button" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu">☰</button></div></header><SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onHome={() => setMenuOpen(false)} onAdd={() => { setMenuOpen(false); startNew(); }} onSettings={() => { setMenuOpen(false); setView("settings"); }} onLogout={logout} cloudMode={cloudEnabled} /><main className="home-page"><section className="welcome"><div><span className="eyebrow">Your home, at a glance</span><h1>A calmer way to keep track.</h1><p>See what you own, where it lives, and what it’s worth.</p></div><div className="stats"><div><strong>{items.length}</strong><span>things</span></div><div><strong>{roomGroups.length}</strong><span>rooms</span></div><div><strong>{formatMoney(totalValue)}</strong><span>total value</span></div></div></section><section className="room-section"><div className="section-heading"><div><span className="eyebrow">Browse by place</span><h2>Rooms</h2></div><span className="result-count">{items.length} {items.length === 1 ? "item" : "items"}</span></div><div className="room-grid"><button type="button" className={activeRoom === "All rooms" ? "room-card room-card-active" : "room-card"} onClick={() => setActiveRoom("All rooms")}><span className="room-symbol">⌂</span><strong>All rooms</strong><small>{items.length} items</small></button>{roomGroups.map(group => <button type="button" key={group.room} className={activeRoom === group.room ? "room-card room-card-active" : "room-card"} onClick={() => setActiveRoom(group.room)}><span className="room-symbol">{group.room === "Outdoor" ? "◌" : "⌂"}</span><strong>{group.room}</strong><small>{group.items.length} {group.items.length === 1 ? "item" : "items"}</small></button>)}</div></section><section className="items-section"><div className="section-heading"><div><span className="eyebrow">{activeRoom}</span><h2>{activeRoom === "All rooms" ? "Recently added" : "Everything here"}</h2></div><div className="search-box"><span>⌕</span><input aria-label="Search your inventory" placeholder="Search" value={query} onChange={event => setQuery(event.target.value)} /></div></div>{visibleItems.length ? <div className="item-grid">{visibleItems.map(item => <ItemCard key={item.id} item={item} onOpen={openItem} onImage={(image, alt) => setLightbox({ image, alt })} />)}</div> : <div className="empty-state"><div className="empty-mark">○</div><h3>{query ? "Nothing found" : activeRoom === "All rooms" ? "Your home is ready to be documented" : `Nothing in the ${activeRoom.toLowerCase()} yet`}</h3><p>{query ? "Try another search." : "Start with one item. Small steps make a useful inventory."}</p><button className="button button-primary" type="button" onClick={startNew}>＋ Add your first item</button></div>}</section></main><ImageLightbox image={lightbox?.image} alt={lightbox?.alt || "Inventory item"} onClose={() => setLightbox(null)} /></div>;
 }

@@ -12,6 +12,7 @@ const ownerId = "primary-owner";
 const cookieName = "hemlist_session";
 const mongoClient = new MongoClient(process.env.MONGODB_URI || "mongodb://127.0.0.1:27017");
 let items;
+let settings;
 
 app.use(cors({ origin: clientOrigin, credentials: true }));
 app.use(express.json({ limit: "12mb" }));
@@ -47,6 +48,7 @@ async function getItems() {
     await mongoClient.connect();
     const database = mongoClient.db(process.env.MONGODB_DB || "hemlist");
     items = database.collection("items");
+    settings = database.collection("settings");
     await items.createIndex({ ownerId: 1, createdAt: -1 });
   }
   return items;
@@ -75,6 +77,22 @@ app.get("/api/auth/me", (request, response) => response.json({ authenticated: Bo
 app.get("/api/items", requireAuth, async (request, response, next) => {
   try { response.json(await (await getItems()).find({ ownerId }).sort({ createdAt: -1 }).toArray()); }
   catch (error) { next(error); }
+});
+
+app.get("/api/rooms", requireAuth, async (request, response, next) => {
+  try {
+    await getItems();
+    const record = await settings.findOne({ ownerId, type: "rooms" });
+    response.json(record?.rooms || ["Living room", "Bedroom", "Kitchen", "Bathroom", "Garage", "Office", "Outdoor", "Other"]);
+  } catch (error) { next(error); }
+});
+
+app.put("/api/rooms", requireAuth, async (request, response, next) => {
+  try {
+    const rooms = [...new Set((request.body?.rooms || []).map(room => String(room).trim()).filter(Boolean))].slice(0, 50);
+    await settings.updateOne({ ownerId, type: "rooms" }, { $set: { ownerId, type: "rooms", rooms, updatedAt: new Date().toISOString() } }, { upsert: true });
+    response.json(rooms);
+  } catch (error) { next(error); }
 });
 
 app.post("/api/items", requireAuth, async (request, response, next) => {
