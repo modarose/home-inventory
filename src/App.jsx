@@ -121,11 +121,11 @@ function FormFields({ form, setForm }) {
         <div className="upload-grid">
           <label className="upload-card">
             <input type="file" accept="image/*" onChange={event => readFile(event.target.files?.[0], (data, name) => setForm(previous => ({ ...previous, photoData: data, photoUrl: "", photoName: name })))} />
-            {form.photoData || form.photoUrl ? <img src={form.photoData || form.photoUrl} alt="Item preview" /> : <><span className="upload-icon">＋</span><strong>Add a photo</strong><small>From your phone or computer</small></>}
+            {form.photoData || form.photoUrl ? <><img src={form.photoData || form.photoUrl} alt="Item preview" /><button type="button" className="upload-remove" onClick={event => { event.preventDefault(); event.stopPropagation(); setForm(previous => ({ ...previous, photoData: "", photoUrl: "", photoName: "" })); }}>Remove photo</button></> : <><span className="upload-icon">＋</span><strong>Add a photo</strong><small>From your phone or computer</small></>}
           </label>
           <label className="upload-card upload-receipt">
             <input type="file" accept="image/*,.pdf" onChange={event => readFile(event.target.files?.[0], (data, name) => setForm(previous => ({ ...previous, receiptData: data, receiptName: name })))} />
-            <span className="upload-icon">▤</span><strong>{form.receiptName || "Add a receipt"}</strong><small>Optional, stored locally</small>
+            <span className="upload-icon">▤</span><strong>{form.receiptName || "Add a receipt"}</strong><small>Optional, {cloudEnabled ? "stored with your inventory" : "stored on this device"}</small>{form.receiptName && <button type="button" className="upload-remove upload-remove-receipt" onClick={event => { event.preventDefault(); event.stopPropagation(); setForm(previous => ({ ...previous, receiptData: "", receiptName: "" })); }}>Remove receipt</button>}
           </label>
         </div>
         <div className="field">

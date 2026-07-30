@@ -14,7 +14,7 @@ HEMLIST is a local-first home inventory app for keeping track of household items
 - Record condition and intended use
 - Add notes such as brand, model, or serial number
 - Upload item photos from a phone or computer
-- Attach receipts locally
+- Attach receipts without a third-party storage service
 - Resize and compress uploaded images before storage
 - Log out of the cloud account from the app
 - Search across item names, rooms, categories, and notes
@@ -59,7 +59,7 @@ npm run lint
 
 ## Data and privacy
 
-HEMLIST is currently local-only. Inventory records, uploaded photos, and receipt attachments are stored in the browser on the device being used.
+HEMLIST supports two storage modes. Without `VITE_API_URL`, inventory records, uploaded photos, and receipt attachments are stored in the browser on the device being used. With the cloud deployment enabled, they are sent to the Render API and stored in MongoDB.
 
 This means:
 
