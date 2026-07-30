@@ -15,6 +15,8 @@ HEMLIST is a local-first home inventory app for keeping track of household items
 - Add notes such as brand, model, or serial number
 - Upload item photos from a phone or computer
 - Attach receipts locally
+- Resize and compress uploaded images before storage
+- Log out of the cloud account from the app
 - Search across item names, rooms, categories, and notes
 - Use a responsive interface on desktop and mobile
 
