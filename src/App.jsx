@@ -149,15 +149,21 @@ function FormFields({ form, setForm, rooms }) {
   );
 }
 
-function ItemCard({ item, onOpen, onImage }) {
+function ItemCard({ item, onOpen }) {
   const total = (item.value || 0) * (item.quantity || 1);
   const image = item.photoData || item.photoUrl;
   return <div className="item-card">
-    <button className={image ? "item-image item-image-button" : "item-image"} type="button" onClick={() => image ? onImage(image, item.name) : onOpen(item)} aria-label={image ? `View photo of ${item.name}` : `Edit ${item.name}`}>
+    <button className="item-image item-image-button" type="button" onClick={() => onOpen(item)} aria-label={`View details for ${item.name}`}>
       {image ? <img src={image} alt="" /> : <span>{item.name?.[0]?.toUpperCase() || "?"}</span>}
     </button>
     <button className="item-card-body" type="button" onClick={() => onOpen(item)}><div className="item-card-heading"><strong>{item.name}</strong><span className="item-arrow">↗</span></div><div className="item-card-meta">{item.category || "Uncategorised"}<span>·</span>{item.quantity || 1} {item.quantity === 1 ? "item" : "items"}</div><div className="item-card-footer"><span>{formatMoney(total)}</span><span className="condition-dot">{item.condition || "Good"}</span></div></button>
   </div>;
+}
+
+function ItemDetail({ item, onBack, onEdit, onImage }) {
+  const image = item.photoData || item.photoUrl;
+  const total = (item.value || 0) * (item.quantity || 1);
+  return <main className="detail-page"><button className="back-link" type="button" onClick={onBack}>← Back to inventory</button><div className="detail-card"><div className={image ? "detail-image" : "detail-image detail-image-placeholder"}>{image ? <button type="button" onClick={() => onImage(image, item.name)} aria-label={`View full size photo of ${item.name}`}><img src={image} alt={item.name} /></button> : <span>{item.name?.[0]?.toUpperCase() || "?"}</span>}</div><div className="detail-content"><div className="detail-heading"><div><span className="eyebrow">{item.location || "Unassigned room"}</span><h1>{item.name}</h1></div><button className="button button-quiet" type="button" onClick={onEdit}>Edit item</button></div><div className="detail-summary"><div><span>Quantity</span><strong>{item.quantity || 1}</strong></div><div><span>Value per item</span><strong>{formatMoney(item.value)}</strong></div><div><span>Total value</span><strong>{formatMoney(total)}</strong></div></div><div className="detail-tags"><span>{item.category || "Uncategorised"}</span><span>{item.condition || "Good"}</span>{(item.usage || []).map(use => <span key={use}>{use}</span>)}</div>{item.notes && <section className="detail-notes"><span className="eyebrow">Notes</span><p>{item.notes}</p></section>}{item.receiptName && <div className="receipt-line">▤ Receipt attached: {item.receiptName}</div>}<p className="detail-hint">Tap the image to view it full size.</p></div></div></main>;
 }
 
 function LoginScreen({ onLogin, error }) {
@@ -194,6 +200,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [lightbox, setLightbox] = useState(null);
 
@@ -207,7 +214,8 @@ export default function App() {
 
   function persist(next) { setItems(next); saveItems(next); }
   function startNew() { setEditingId(null); setForm(EMPTY_FORM); setView("form"); }
-  function openItem(item) { setEditingId(item.id); setForm({ ...EMPTY_FORM, ...item, quantity: String(item.quantity || 1), value: item.value == null ? "" : String(item.value) }); setView("form"); }
+  function openItem(item) { setDetailItem(item); setView("detail"); }
+  function editItem(item) { setEditingId(item.id); setForm({ ...EMPTY_FORM, ...item, quantity: String(item.quantity || 1), value: item.value == null ? "" : String(item.value) }); setView("form"); }
   async function saveForm(event) {
     event.preventDefault();
     if (!form.name.trim()) return;
@@ -278,6 +286,8 @@ export default function App() {
 
   if (authStatus === "loading") return <div className="login-shell"><div className="login-card login-loading">Loading your inventory…</div></div>;
   if (cloudEnabled && authStatus !== "authenticated") return <LoginScreen onLogin={login} error={authError} />;
+
+  if (view === "detail" && detailItem) return <div className="app-shell"><header className="topbar"><button className="brand brand-button" type="button" onClick={() => setView("home")}>HEMLIST<span>home, documented</span></button><button className="menu-button" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu">☰</button></header><SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onHome={() => { setMenuOpen(false); setView("home"); }} onAdd={() => { setMenuOpen(false); startNew(); }} onSettings={() => { setMenuOpen(false); setView("settings"); }} onLogout={logout} cloudMode={cloudEnabled} /><ItemDetail item={detailItem} onBack={() => setView("home")} onEdit={() => editItem(detailItem)} onImage={(image, alt) => setLightbox({ image, alt })} /><ImageLightbox image={lightbox?.image} alt={lightbox?.alt || "Inventory item"} onClose={() => setLightbox(null)} /></div>;
 
   if (view === "form") return <div className="app-shell"><header className="topbar"><button className="brand brand-button" type="button" onClick={() => setView("home")}>HEMLIST<span>home, documented</span></button><div className="topbar-actions"><button className="text-button" type="button" onClick={() => setView("home")}>Cancel</button><button className="menu-button" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu">☰</button></div></header><SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} onHome={() => { setMenuOpen(false); setView("home"); }} onAdd={() => { setMenuOpen(false); startNew(); }} onSettings={() => { setMenuOpen(false); setView("settings"); }} onLogout={logout} cloudMode={cloudEnabled} /><main className="form-page"><div className="form-intro"><span className="eyebrow">{editingId ? "Update your inventory" : "A little more clarity at home"}</span><h1>{editingId ? "Edit item" : "Add something to your home"}</h1><p>Capture the details now. You’ll thank yourself later.</p></div><form onSubmit={saveForm}><FormFields form={form} setForm={setForm} rooms={roomNames} /><div className="form-actions"><button type="button" className="button button-quiet" onClick={() => setView("home")}>Cancel</button>{editingId && <button type="button" className="button button-danger" onClick={deleteItem}>Delete</button>}<button className="button button-primary" type="submit">{editingId ? "Save changes" : "Save item"}</button></div></form></main></div>;
 
