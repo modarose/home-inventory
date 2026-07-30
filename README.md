@@ -117,10 +117,10 @@ The included `render.yaml` can also be used as a starting point for a Blueprint 
 Import the repository into Vercel and use the default Vite settings. Add this environment variable:
 
 ```text
-VITE_API_URL=https://your-render-service.onrender.com/api
+VITE_API_URL=/api
 ```
 
-After the Vercel deployment is available, update `CLIENT_ORIGIN` in Render to the final Vercel URL and redeploy the API.
+The Vercel deployment proxies `/api` to Render. This keeps the frontend and API on the same browser origin, which allows the private session cookie to work more reliably on mobile browsers. After the Vercel deployment is available, keep `CLIENT_ORIGIN` in Render set to the final Vercel URL and redeploy the API.
 
 ### Security notes
 
