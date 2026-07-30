@@ -41,6 +41,21 @@ function formatMoney(value) {
   return value == null ? "—" : `$${Number(value).toLocaleString("en-AU", { maximumFractionDigits: 0 })}`;
 }
 
+function roomIcon(room) {
+  const icons = {
+    "All rooms": "⌂",
+    "Living room": "▱",
+    Bedroom: "▱",
+    Kitchen: "♨",
+    Bathroom: "≋",
+    Garage: "▥",
+    Office: "▣",
+    Outdoor: "❧",
+    Other: "□",
+  };
+  return icons[room] || "□";
+}
+
 async function readFile(file, onLoad) {
   if (!file) return;
   if (file.type.startsWith("image/")) {
@@ -211,6 +226,13 @@ export default function App() {
       setAuthStatus("logged-out");
     }).catch(error => { setAuthError(error.message); setAuthStatus("error"); });
   }, []);
+
+  useEffect(() => {
+    document.querySelectorAll(".room-card").forEach(card => {
+      const room = card.querySelector("strong")?.textContent;
+      card.style.setProperty("--room-icon", `"${roomIcon(room)}"`);
+    });
+  }, [roomNames, items, activeRoom]);
 
   function persist(next) { setItems(next); saveItems(next); }
   function startNew() { setEditingId(null); setForm(EMPTY_FORM); setView("form"); }
