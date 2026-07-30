@@ -1,386 +1,165 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import "./App.css";
 
 const STORAGE_KEY = "homeInventory_v1";
-const ROOMS = ["Living room","Bedroom","Kitchen","Bathroom","Garage","Office","Outdoor","Other"];
-const CATEGORIES = ["Furniture","Electronics","Appliance","Lighting","Decor","Clothing","Tools","Other"];
-const EMPTY_FORM = { name:"", location:"", category:"", value:"", usage:["insurance"], photoUrl:"", notes:"" };
+const ROOMS = ["Living room", "Bedroom", "Kitchen", "Bathroom", "Garage", "Office", "Outdoor", "Other"];
+const CATEGORIES = ["Furniture", "Electronics", "Appliance", "Lighting", "Decor", "Clothing", "Tools", "Other"];
+const PURPOSES = ["insurance", "airbnb", "general"];
+const EMPTY_FORM = {
+  name: "", location: "", category: "", quantity: "1", value: "", condition: "Good",
+  usage: ["general"], photoUrl: "", photoData: "", receiptName: "", notes: "",
+};
 
 function loadItems() {
-  try { return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]"); }
-  catch { return []; }
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(stored) ? stored.map(item => ({ quantity: 1, condition: "Good", ...item })) : [];
+  } catch {
+    return [];
+  }
 }
 
 function saveItems(items) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
+  catch { window.alert("Your browser storage is full. Try removing a large photo or export your inventory before continuing."); }
 }
 
-// ── OUTSIDE App so it never gets recreated ────────────
-function FormFields({ f, setF }) {
-  function toggleTag(tag) {
-    setF(p => ({
-      ...p,
-      usage: p.usage.includes(tag)
-        ? p.usage.filter(t => t !== tag)
-        : [...p.usage, tag],
+function formatMoney(value) {
+  return value == null ? "—" : `$${Number(value).toLocaleString("en-AU", { maximumFractionDigits: 0 })}`;
+}
+
+function readFile(file, onLoad) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => onLoad(reader.result, file.name);
+  reader.readAsDataURL(file);
+}
+
+function FormFields({ form, setForm }) {
+  function update(key, value) { setForm(previous => ({ ...previous, [key]: value })); }
+  function togglePurpose(purpose) {
+    setForm(previous => ({
+      ...previous,
+      usage: previous.usage.includes(purpose)
+        ? previous.usage.filter(item => item !== purpose)
+        : [...previous.usage, purpose],
     }));
   }
 
   return (
-    <>
-      <div className="field">
-        <span>Item name *</span>
-        <input
-          value={f.name}
-          onChange={e => setF(p => ({ ...p, name: e.target.value }))}
-          placeholder="e.g. Söderhamn sofa"
-        />
-      </div>
-
-      <div className="field-row">
+    <div className="form-fields">
+      <section className="form-section">
+        <div className="section-kicker">The essentials</div>
         <div className="field">
-          <span>Room</span>
-          <select
-            value={f.location}
-            onChange={e => setF(p => ({ ...p, location: e.target.value }))}
-          >
-            <option value="">Select room</option>
-            {ROOMS.map(r => <option key={r}>{r}</option>)}
-          </select>
+          <label htmlFor="item-name">What are you keeping track of?</label>
+          <input id="item-name" value={form.name} onChange={event => update("name", event.target.value)} placeholder="e.g. Oak dining table" autoFocus />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="item-room">Room</label>
+            <select id="item-room" value={form.location} onChange={event => update("location", event.target.value)}>
+              <option value="">Choose a room</option>
+              {ROOMS.map(room => <option key={room}>{room}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="item-category">Category</label>
+            <select id="item-category" value={form.category} onChange={event => update("category", event.target.value)}>
+              <option value="">Choose a category</option>
+              {CATEGORIES.map(category => <option key={category}>{category}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="item-quantity">Quantity</label>
+            <input id="item-quantity" type="number" min="1" step="1" value={form.quantity} onChange={event => update("quantity", event.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="item-value">Value per item <span className="label-hint">AUD</span></label>
+            <div className="money-input"><span>$</span><input id="item-value" type="number" min="0" step="1" value={form.value} onChange={event => update("value", event.target.value)} placeholder="0" /></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="form-section">
+        <div className="section-kicker">Make it yours</div>
+        <div className="field">
+          <label>Condition</label>
+          <div className="choice-row">
+            {["New", "Good", "Worn", "Needs attention"].map(condition => <button key={condition} type="button" className={form.condition === condition ? "choice choice-active" : "choice"} onClick={() => update("condition", condition)}>{condition}</button>)}
+          </div>
         </div>
         <div className="field">
-          <span>Category</span>
-          <select
-            value={f.category}
-            onChange={e => setF(p => ({ ...p, category: e.target.value }))}
-          >
-            <option value="">Select category</option>
-            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-          </select>
+          <label>Use this item for</label>
+          <div className="choice-row">
+            {PURPOSES.map(purpose => <button key={purpose} type="button" className={form.usage.includes(purpose) ? "choice choice-active" : "choice"} onClick={() => togglePurpose(purpose)}>{purpose}</button>)}
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="field">
-        <span>Estimated value (AUD)</span>
-        <div className="input-prefix-wrap">
-          <span className="input-prefix">$</span>
-          <input
-            className="input-prefixed"
-            inputMode="decimal"
-            value={f.value}
-            onChange={e => setF(p => ({ ...p, value: e.target.value }))}
-            placeholder="0"
-          />
+      <section className="form-section">
+        <div className="section-kicker">Keep the details close</div>
+        <div className="upload-grid">
+          <label className="upload-card">
+            <input type="file" accept="image/*" onChange={event => readFile(event.target.files?.[0], (data, name) => setForm(previous => ({ ...previous, photoData: data, photoUrl: "", photoName: name })))} />
+            {form.photoData || form.photoUrl ? <img src={form.photoData || form.photoUrl} alt="Item preview" /> : <><span className="upload-icon">＋</span><strong>Add a photo</strong><small>From your phone or computer</small></>}
+          </label>
+          <label className="upload-card upload-receipt">
+            <input type="file" accept="image/*,.pdf" onChange={event => readFile(event.target.files?.[0], (data, name) => setForm(previous => ({ ...previous, receiptData: data, receiptName: name })))} />
+            <span className="upload-icon">▤</span><strong>{form.receiptName || "Add a receipt"}</strong><small>Optional, stored locally</small>
+          </label>
         </div>
-      </div>
-
-      <div className="field">
-        <span>Photo URL</span>
-        <input
-          value={f.photoUrl}
-          onChange={e => setF(p => ({ ...p, photoUrl: e.target.value }))}
-          placeholder="https://…"
-        />
-      </div>
-
-      <div className="field">
-        <span>Purpose</span>
-        <div className="tag-row">
-          {["insurance","airbnb","general"].map(tag => (
-            <button
-              key={tag}
-              type="button"
-              className={f.usage.includes(tag) ? "tag tag-active" : "tag"}
-              onClick={() => toggleTag(tag)}
-            >
-              {tag}
-            </button>
-          ))}
+        <div className="field">
+          <label htmlFor="item-notes">Notes</label>
+          <textarea id="item-notes" rows={4} value={form.notes} onChange={event => update("notes", event.target.value)} placeholder="Brand, model, serial number, purchase details..." />
         </div>
-      </div>
-
-      <div className="field">
-        <span>Notes</span>
-        <textarea
-          rows={3}
-          value={f.notes}
-          onChange={e => setF(p => ({ ...p, notes: e.target.value }))}
-          placeholder="Serial number, purchase date, brand…"
-        />
-      </div>
-    </>
-  );
-}
-
-// ── App ───────────────────────────────────────────────
-export default function App() {
-  const [items,       setItems]       = useState(loadItems);
-  const [view,        setView]        = useState("list");
-  const [form,        setForm]        = useState(EMPTY_FORM);
-  const [filters,     setFilters]     = useState({ query:"", usage:"all" });
-  const [sortBy,      setSortBy]      = useState("newest");
-  const [editingItem, setEditingItem] = useState(null);
-  const [editForm,    setEditForm]    = useState(null);
-
-  function persist(next) { setItems(next); saveItems(next); }
-
-  // ── add ──────────────────────────────────────────────
-  function addItem() {
-    if (!form.name.trim()) {
-      alert("Please enter an item name.");
-      return;
-    }
-    persist([...items, {
-      id:       crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      name:     form.name.trim(),
-      location: form.location,
-      category: form.category,
-      value:    form.value ? Number(form.value) : null,
-      usage:    form.usage,
-      photoUrl: form.photoUrl.trim(),
-      notes:    form.notes.trim(),
-    }]);
-    setForm(EMPTY_FORM);
-    setView("list");
-  }
-
-  // ── edit ─────────────────────────────────────────────
-  function openEdit(item) {
-    setEditingItem(item);
-    setEditForm({
-      name:     item.name,
-      location: item.location || "",
-      category: item.category || "",
-      value:    item.value != null ? String(item.value) : "",
-      usage:    item.usage || [],
-      photoUrl: item.photoUrl || "",
-      notes:    item.notes || "",
-    });
-  }
-
-  function closeEdit() { setEditingItem(null); setEditForm(null); }
-
-  function saveEdit() {
-    if (!editForm.name.trim()) {
-      alert("Item name cannot be empty.");
-      return;
-    }
-    persist(items.map(it => it.id !== editingItem.id ? it : {
-      ...it,
-      name:      editForm.name.trim(),
-      location:  editForm.location,
-      category:  editForm.category,
-      value:     editForm.value ? Number(editForm.value) : null,
-      usage:     editForm.usage,
-      photoUrl:  editForm.photoUrl.trim(),
-      notes:     editForm.notes.trim(),
-      updatedAt: new Date().toISOString(),
-    }));
-    closeEdit();
-  }
-
-  function deleteItem(id) {
-    if (!window.confirm("Delete this item?")) return;
-    persist(items.filter(it => it.id !== id));
-    closeEdit();
-  }
-
-  // ── derived ───────────────────────────────────────────
-  const totalValue = items.reduce((s, i) => s + (i.value || 0), 0);
-
-  const visible = [...items]
-    .filter(item => {
-      const q = filters.query.toLowerCase();
-      const matchQ = !q
-        || item.name.toLowerCase().includes(q)
-        || (item.location||"").toLowerCase().includes(q)
-        || (item.category||"").toLowerCase().includes(q);
-      const matchU = filters.usage === "all"
-        || (item.usage||[]).includes(filters.usage);
-      return matchQ && matchU;
-    })
-    .sort((a, b) => {
-      if (sortBy === "newest")     return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortBy === "oldest")     return new Date(a.createdAt) - new Date(b.createdAt);
-      if (sortBy === "value-high") return (b.value||0) - (a.value||0);
-      if (sortBy === "value-low")  return (a.value||0) - (b.value||0);
-      if (sortBy === "name")       return a.name.localeCompare(b.name);
-      return 0;
-    });
-
-  return (
-    <div className="app-root">
-
-      {/* Header */}
-      <header className="app-header">
-        <div className="header-inner">
-          <div>
-            <h1 className="app-title">HEMLIST</h1>
-            <p className="app-subtitle">Your home, documented.</p>
-          </div>
-          <button
-            type="button"
-            className={view === "add" ? "btn-ghost" : "btn-primary"}
-            onClick={() => setView(v => v === "add" ? "list" : "add")}
-          >
-            {view === "add" ? "← Back" : "+ Add item"}
-          </button>
-        </div>
-
-        {view === "list" && (
-          <div className="stats-bar">
-            <div className="stat">
-              <span className="stat-value">{items.length}</span>
-              <span className="stat-label">Items</span>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat">
-              <span className="stat-value">
-                {[...new Set(items.map(i => i.location).filter(Boolean))].length}
-              </span>
-              <span className="stat-label">Rooms</span>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat">
-              <span className="stat-value">${totalValue.toLocaleString()}</span>
-              <span className="stat-label">Total value</span>
-            </div>
-          </div>
-        )}
-      </header>
-
-      <main className="app-main">
-
-        {/* ── Add view ── */}
-        {view === "add" && (
-          <div className="panel fade-in">
-            <h2 className="panel-title">New item</h2>
-            <div className="form">
-              <FormFields f={form} setF={setForm} />
-              <div className="form-actions">
-                <button type="button" className="btn-ghost"
-                  onClick={() => setView("list")}>
-                  Cancel
-                </button>
-                <button type="button" className="btn-primary"
-                  onClick={addItem}>
-                  Save item
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── List view ── */}
-        {view === "list" && (
-          <div className="fade-in">
-            <div className="filters-bar">
-              <div className="search-wrap">
-                <span className="search-icon">⌕</span>
-                <input
-                  className="search-input"
-                  placeholder="Search items, rooms, categories…"
-                  value={filters.query}
-                  onChange={e => setFilters(f => ({ ...f, query: e.target.value }))}
-                />
-              </div>
-              <div className="filter-row">
-                <select className="filter-select" value={filters.usage}
-                  onChange={e => setFilters(f => ({ ...f, usage: e.target.value }))}>
-                  <option value="all">All purposes</option>
-                  <option value="insurance">Insurance</option>
-                  <option value="airbnb">Airbnb</option>
-                  <option value="general">General</option>
-                </select>
-                <select className="filter-select" value={sortBy}
-                  onChange={e => setSortBy(e.target.value)}>
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                  <option value="name">Name A–Z</option>
-                  <option value="value-high">Value: high–low</option>
-                  <option value="value-low">Value: low–high</option>
-                </select>
-              </div>
-            </div>
-
-            {visible.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">⬜</div>
-                <p>No items yet.</p>
-                <p className="empty-sub">
-                  Tap <strong>+ Add item</strong> to get started.
-                </p>
-              </div>
-            ) : (
-              <div className="card-grid">
-                {visible.map(item => (
-                  <div key={item.id} className="item-card"
-                    onClick={() => openEdit(item)}>
-                    {item.photoUrl
-                      ? <img src={item.photoUrl} alt={item.name} className="card-photo" />
-                      : <div className="card-photo-placeholder">
-                          <span>{item.category?.[0] || "?"}</span>
-                        </div>
-                    }
-                    <div className="card-body">
-                      <div className="card-top">
-                        <span className="card-name">{item.name}</span>
-                        <span className="card-edit-hint">Edit</span>
-                      </div>
-                      <div className="card-meta">
-                        {item.location && <span className="meta-pill">{item.location}</span>}
-                        {item.category && <span className="meta-pill">{item.category}</span>}
-                      </div>
-                      {item.notes && <p className="card-notes">{item.notes}</p>}
-                      <div className="card-footer">
-                        <span className="card-value">
-                          {item.value != null ? `$${item.value.toLocaleString()}` : "—"}
-                        </span>
-                        <div className="tag-row">
-                          {(item.usage||[]).map(u => (
-                            <span key={u} className={`tag tag-pill tag-${u}`}>{u}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* ── Edit modal ── */}
-      {editingItem && editForm && (
-        <>
-          <div className="modal-backdrop" onClick={closeEdit} />
-          <div className="modal fade-in">
-            <div className="modal-header">
-              <h2 className="panel-title">Edit item</h2>
-              <button type="button" className="modal-close"
-                onClick={closeEdit}>✕</button>
-            </div>
-            <div className="form">
-              <FormFields f={editForm} setF={setEditForm} />
-              <div className="form-actions form-actions-edit">
-                <button type="button" className="btn-danger"
-                  onClick={() => deleteItem(editingItem.id)}>
-                  Delete
-                </button>
-                <div className="form-actions-right">
-                  <button type="button" className="btn-ghost"
-                    onClick={closeEdit}>Cancel</button>
-                  <button type="button" className="btn-primary"
-                    onClick={saveEdit}>Save changes</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
+      </section>
     </div>
   );
+}
+
+function ItemCard({ item, onOpen }) {
+  const total = (item.value || 0) * (item.quantity || 1);
+  return <button className="item-card" type="button" onClick={() => onOpen(item)}>
+    <div className="item-image">{item.photoData || item.photoUrl ? <img src={item.photoData || item.photoUrl} alt="" /> : <span>{item.name?.[0]?.toUpperCase() || "?"}</span>}</div>
+    <div className="item-card-body"><div className="item-card-heading"><strong>{item.name}</strong><span className="item-arrow">↗</span></div><div className="item-card-meta">{item.category || "Uncategorised"}<span>·</span>{item.quantity || 1} {item.quantity === 1 ? "item" : "items"}</div><div className="item-card-footer"><span>{formatMoney(total)}</span><span className="condition-dot">{item.condition || "Good"}</span></div></div>
+  </button>;
+}
+
+export default function App() {
+  const [items, setItems] = useState(loadItems);
+  const [view, setView] = useState("home");
+  const [activeRoom, setActiveRoom] = useState("All rooms");
+  const [query, setQuery] = useState("");
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editingId, setEditingId] = useState(null);
+
+  function persist(next) { setItems(next); saveItems(next); }
+  function startNew() { setEditingId(null); setForm(EMPTY_FORM); setView("form"); }
+  function openItem(item) { setEditingId(item.id); setForm({ ...EMPTY_FORM, ...item, quantity: String(item.quantity || 1), value: item.value == null ? "" : String(item.value) }); setView("form"); }
+  function saveForm(event) {
+    event.preventDefault();
+    if (!form.name.trim()) return;
+    const item = { ...form, name: form.name.trim(), quantity: Math.max(1, Number(form.quantity) || 1), value: form.value === "" ? null : Math.max(0, Number(form.value) || 0), updatedAt: new Date().toISOString() };
+    if (editingId) persist(items.map(existing => existing.id === editingId ? { ...existing, ...item } : existing));
+    else persist([...items, { ...item, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+    setView("home");
+  }
+  function deleteItem() {
+    if (!editingId || !window.confirm("Remove this item from your home inventory?")) return;
+    persist(items.filter(item => item.id !== editingId)); setView("home");
+  }
+
+  const totalValue = items.reduce((sum, item) => sum + ((item.value || 0) * (item.quantity || 1)), 0);
+  const rooms = useMemo(() => ROOMS.map(room => ({ room, items: items.filter(item => item.location === room) })).filter(group => group.items.length), [items]);
+  const visibleItems = useMemo(() => items.filter(item => {
+    const matchesRoom = activeRoom === "All rooms" || item.location === activeRoom;
+    const needle = query.toLowerCase();
+    return matchesRoom && (!needle || [item.name, item.location, item.category, item.notes].some(value => (value || "").toLowerCase().includes(needle)));
+  }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)), [items, activeRoom, query]);
+
+  if (view === "form") return <div className="app-shell"><header className="topbar"><button className="brand brand-button" type="button" onClick={() => setView("home")}>HEMLIST<span>home, documented</span></button><button className="text-button" type="button" onClick={() => setView("home")}>Cancel</button></header><main className="form-page"><div className="form-intro"><span className="eyebrow">{editingId ? "Update your inventory" : "A little more clarity at home"}</span><h1>{editingId ? "Edit item" : "Add something to your home"}</h1><p>Capture the details now. You’ll thank yourself later.</p></div><form onSubmit={saveForm}><FormFields form={form} setForm={setForm} /><div className="form-actions"><button type="button" className="button button-quiet" onClick={() => setView("home")}>Cancel</button>{editingId && <button type="button" className="button button-danger" onClick={deleteItem}>Delete</button>}<button className="button button-primary" type="submit">{editingId ? "Save changes" : "Save item"}</button></div></form></main></div>;
+
+  return <div className="app-shell"><header className="topbar"><div className="brand">HEMLIST<span>home, documented</span></div><button className="button button-primary button-small" type="button" onClick={startNew}>＋ Add item</button></header><main className="home-page"><section className="welcome"><div><span className="eyebrow">Your home, at a glance</span><h1>A calmer way to keep track.</h1><p>See what you own, where it lives, and what it’s worth.</p></div><div className="stats"><div><strong>{items.length}</strong><span>things</span></div><div><strong>{rooms.length}</strong><span>rooms</span></div><div><strong>{formatMoney(totalValue)}</strong><span>total value</span></div></div></section><section className="room-section"><div className="section-heading"><div><span className="eyebrow">Browse by place</span><h2>Rooms</h2></div><span className="result-count">{items.length} {items.length === 1 ? "item" : "items"}</span></div><div className="room-grid"><button type="button" className={activeRoom === "All rooms" ? "room-card room-card-active" : "room-card"} onClick={() => setActiveRoom("All rooms")}><span className="room-symbol">⌂</span><strong>All rooms</strong><small>{items.length} items</small></button>{rooms.map(group => <button type="button" key={group.room} className={activeRoom === group.room ? "room-card room-card-active" : "room-card"} onClick={() => setActiveRoom(group.room)}><span className="room-symbol">{group.room === "Outdoor" ? "◌" : "⌂"}</span><strong>{group.room}</strong><small>{group.items.length} {group.items.length === 1 ? "item" : "items"}</small></button>)}</div></section><section className="items-section"><div className="section-heading"><div><span className="eyebrow">{activeRoom}</span><h2>{activeRoom === "All rooms" ? "Recently added" : "Everything here"}</h2></div><div className="search-box"><span>⌕</span><input aria-label="Search your inventory" placeholder="Search" value={query} onChange={event => setQuery(event.target.value)} /></div></div>{visibleItems.length ? <div className="item-grid">{visibleItems.map(item => <ItemCard key={item.id} item={item} onOpen={openItem} />)}</div> : <div className="empty-state"><div className="empty-mark">○</div><h3>{query ? "Nothing found" : activeRoom === "All rooms" ? "Your home is ready to be documented" : `Nothing in the ${activeRoom.toLowerCase()} yet`}</h3><p>{query ? "Try another search." : "Start with one item. Small steps make a useful inventory."}</p><button className="button button-primary" type="button" onClick={startNew}>＋ Add your first item</button></div>}</section></main></div>;
 }

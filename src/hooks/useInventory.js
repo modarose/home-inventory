@@ -3,14 +3,15 @@ import { useEffect, useState } from "react";
 const STORAGE_KEY = "homeInventory_v1";
 
 export function useInventory() {
-  const [items, setItems] = useState([]);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      setItems(JSON.parse(stored));
+  const [items, setItems] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
     }
-  }, []);
+  });
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));

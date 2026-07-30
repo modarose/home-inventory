@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Filters } from "./Filters";
 
-export function ItemTable({ items, onUpdate, onDelete }) {
+export function ItemTable({ items, onDelete }) {
   const [filters, setFilters] = useState({ query: "", usage: "all" });
 
   const filtered = useMemo(() => {
