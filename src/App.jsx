@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { api, cloudEnabled } from "./lib/api";
 
 const STORAGE_KEY = "homeInventory_v1";
 const ROOMS = ["Living room", "Bedroom", "Kitchen", "Bathroom", "Garage", "Office", "Outdoor", "Other"];
@@ -127,30 +128,59 @@ function ItemCard({ item, onOpen }) {
   </button>;
 }
 
+function LoginScreen({ onLogin, error }) {
+  const [password, setPassword] = useState("");
+  return <div className="login-shell"><div className="login-card"><div className="brand">HEMLIST<span>home, documented</span></div><span className="eyebrow">Your private inventory</span><h1>Welcome home.</h1><p>Enter your password to access your household inventory.</p><form onSubmit={event => { event.preventDefault(); onLogin(password); }}><label className="login-label" htmlFor="login-password">Password</label><input id="login-password" className="login-input" type="password" value={password} onChange={event => setPassword(event.target.value)} autoFocus /><button className="button button-primary login-button" type="submit">Unlock inventory</button>{error && <div className="login-error" role="alert">{error}</div>}</form><small className="login-note">Your data is stored securely in your private cloud database.</small></div></div>;
+}
+
 export default function App() {
-  const [items, setItems] = useState(loadItems);
+  const [items, setItems] = useState(() => cloudEnabled ? [] : loadItems());
+  const [authStatus, setAuthStatus] = useState(cloudEnabled ? "loading" : "local");
+  const [authError, setAuthError] = useState("");
   const [view, setView] = useState("home");
   const [activeRoom, setActiveRoom] = useState("All rooms");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
 
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    api.me().then(result => {
+      if (result.authenticated) return api.listItems().then(remoteItems => { setItems(remoteItems); setAuthStatus("authenticated"); });
+      setAuthStatus("logged-out");
+    }).catch(error => { setAuthError(error.message); setAuthStatus("error"); });
+  }, []);
+
   function persist(next) { setItems(next); saveItems(next); }
   function startNew() { setEditingId(null); setForm(EMPTY_FORM); setView("form"); }
   function openItem(item) { setEditingId(item.id); setForm({ ...EMPTY_FORM, ...item, quantity: String(item.quantity || 1), value: item.value == null ? "" : String(item.value) }); setView("form"); }
-  function saveForm(event) {
+  async function saveForm(event) {
     event.preventDefault();
     if (!form.name.trim()) return;
     const item = { ...form, name: form.name.trim(), quantity: Math.max(1, Number(form.quantity) || 1), value: form.value === "" ? null : Math.max(0, Number(form.value) || 0), updatedAt: new Date().toISOString() };
-    if (editingId) persist(items.map(existing => existing.id === editingId ? { ...existing, ...item } : existing));
-    else persist([...items, { ...item, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
-    setView("home");
+    try {
+      if (cloudEnabled) {
+        if (editingId) await api.updateItem(editingId, item);
+        else await api.createItem({ ...item, id: crypto.randomUUID(), createdAt: new Date().toISOString() });
+        setItems(await api.listItems());
+      } else if (editingId) persist(items.map(existing => existing.id === editingId ? { ...existing, ...item } : existing));
+      else persist([...items, { ...item, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+      setView("home");
+    } catch (error) { window.alert(error.message); }
   }
-  function deleteItem() {
+  async function deleteItem() {
     if (!editingId || !window.confirm("Remove this item from your home inventory?")) return;
-    persist(items.filter(item => item.id !== editingId)); setView("home");
+    try {
+      if (cloudEnabled) { await api.deleteItem(editingId); setItems(await api.listItems()); }
+      else persist(items.filter(item => item.id !== editingId));
+      setView("home");
+    } catch (error) { window.alert(error.message); }
   }
 
+  async function login(password) {
+    try { await api.login(password); setItems(await api.listItems()); setAuthStatus("authenticated"); setAuthError(""); }
+    catch (error) { setAuthError(error.message); }
+  }
   const totalValue = items.reduce((sum, item) => sum + ((item.value || 0) * (item.quantity || 1)), 0);
   const rooms = useMemo(() => ROOMS.map(room => ({ room, items: items.filter(item => item.location === room) })).filter(group => group.items.length), [items]);
   const visibleItems = useMemo(() => items.filter(item => {
@@ -158,6 +188,9 @@ export default function App() {
     const needle = query.toLowerCase();
     return matchesRoom && (!needle || [item.name, item.location, item.category, item.notes].some(value => (value || "").toLowerCase().includes(needle)));
   }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)), [items, activeRoom, query]);
+
+  if (authStatus === "loading") return <div className="login-shell"><div className="login-card login-loading">Loading your inventory…</div></div>;
+  if (cloudEnabled && authStatus !== "authenticated") return <LoginScreen onLogin={login} error={authError} />;
 
   if (view === "form") return <div className="app-shell"><header className="topbar"><button className="brand brand-button" type="button" onClick={() => setView("home")}>HEMLIST<span>home, documented</span></button><button className="text-button" type="button" onClick={() => setView("home")}>Cancel</button></header><main className="form-page"><div className="form-intro"><span className="eyebrow">{editingId ? "Update your inventory" : "A little more clarity at home"}</span><h1>{editingId ? "Edit item" : "Add something to your home"}</h1><p>Capture the details now. You’ll thank yourself later.</p></div><form onSubmit={saveForm}><FormFields form={form} setForm={setForm} /><div className="form-actions"><button type="button" className="button button-quiet" onClick={() => setView("home")}>Cancel</button>{editingId && <button type="button" className="button button-danger" onClick={deleteItem}>Delete</button>}<button className="button button-primary" type="submit">{editingId ? "Save changes" : "Save item"}</button></div></form></main></div>;
 

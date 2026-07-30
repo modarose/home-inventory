@@ -69,6 +69,63 @@ This means:
 
 Cloud synchronisation, multi-property support, and more durable file storage are intentionally deferred until the core experience is mature.
 
+## Cloud deployment
+
+The repository now includes an optional cloud setup:
+
+- **Vercel** serves the Vite frontend
+- **Render** runs the API in `server/`
+- **MongoDB Atlas** stores inventory records
+
+The frontend remains local-only when `VITE_API_URL` is not set. When it is set, the app shows a private password screen and uses the Render API instead of browser storage.
+
+### 1. Create the MongoDB database
+
+In MongoDB Atlas:
+
+1. Create a cluster and database named `hemlist`.
+2. Create a database user.
+3. Allow your Render service to connect. For an initial deployment, Atlas Network Access can use `0.0.0.0/0`; restrict this later if your hosting setup provides fixed egress IPs.
+4. Copy the connection string for the Render environment variables.
+
+### 2. Deploy the API to Render
+
+Create a new Render Web Service from the repository with:
+
+```text
+Root directory: server
+Build command: npm install
+Start command: npm start
+Health check path: /api/health
+```
+
+Set these environment variables in Render:
+
+```text
+NODE_ENV=production
+MONGODB_URI=your MongoDB Atlas connection string
+MONGODB_DB=hemlist
+APP_PASSWORD=a long private password
+SESSION_SECRET=a long random secret
+CLIENT_ORIGIN=your Vercel URL
+```
+
+The included `render.yaml` can also be used as a starting point for a Blueprint deployment.
+
+### 3. Deploy the frontend to Vercel
+
+Import the repository into Vercel and use the default Vite settings. Add this environment variable:
+
+```text
+VITE_API_URL=https://your-render-service.onrender.com/api
+```
+
+After the Vercel deployment is available, update `CLIENT_ORIGIN` in Render to the final Vercel URL and redeploy the API.
+
+### Security notes
+
+The first cloud release uses one configured password and a signed, HTTP-only session cookie. Inventory records already contain an `ownerId` field so the API can later switch to real user accounts without changing the item model. Do not commit `.env` files or production secrets.
+
 ## Project structure
 
 ```text
